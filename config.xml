@@ -1,0 +1,3 @@
+<config>
+    <tar_path>/path/to/your/virtual_fs.tar</tar_path>
+</config>
