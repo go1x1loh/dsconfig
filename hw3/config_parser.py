@@ -2,6 +2,7 @@ import re
 import argparse
 import xml.etree.ElementTree as ET
 import sys
+from xml.dom import minidom
 
 
 class ConfigParser:
@@ -92,8 +93,16 @@ def main():
     config_parser = ConfigParser()
     try:
         root = config_parser.parse(input_text)
-        tree = ET.ElementTree(root)
-        tree.write(args.output, encoding="utf-8", xml_declaration=True)
+
+        # Форматируем XML
+        rough_string = ET.tostring(root, encoding="utf-8")
+        parsed = minidom.parseString(rough_string)
+        pretty_xml = parsed.toprettyxml(indent="  ")
+
+        # Записываем отформатированный XML в файл
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(pretty_xml)
+
         print(f"XML успешно записан в {args.output}")
     except Exception as e:
         print(f"Ошибка: {e}")
