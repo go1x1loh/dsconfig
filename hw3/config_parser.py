@@ -1,75 +1,104 @@
-import sys
 import re
+import argparse
 import xml.etree.ElementTree as ET
+import sys
+
 
 class ConfigParser:
     def __init__(self):
         self.constants = {}
 
-    def parse(self, lines):
-        root = ET.Element("configuration")
-        for line in lines:
+    def parse(self, text):
+        text = self._remove_comments(text)
+        lines_iter = iter(text.splitlines())
+        result = ET.Element("config")
+
+        for line in lines_iter:
             line = line.strip()
-            if line.startswith("REM") or line.startswith("/*"):
-                continue  # Пропускаем комментарии
-            elif re.match(r'^[a-zA-Z][_a-zA-Z0-9]*\s*->\s*[a-zA-Z][_a-zA-Z0-9]*;', line):
-                self.handle_constant_declaration(line, root)
-            elif re.match(r'^\$[a-zA-Z][_a-zA-Z0-9]*\$$', line):
-                self.handle_constant_evaluation(line, root)
+            if not line:
+                continue
+            if "->" in line:
+                self._process_constant(line)
             elif line.startswith("dict("):
-                self.handle_dictionary(line, root)
+                result.append(self._parse_dict(lines_iter))
             else:
-                raise SyntaxError(f"Синтаксическая ошибка: {line}")
-        return ET.tostring(root, encoding='unicode')
+                raise SyntaxError(f"Unexpected line: {line}")
+        return result
 
-    def handle_constant_declaration(self, line, root):
-        match = re.match(r'([a-zA-Z][_a-zA-Z0-9]*)\s*->\s*([a-zA-Z][_a-zA-Z0-9]*);', line)
-        if match:
-            name = match.group(1)
-            value = match.group(2)
-            self.constants[name] = value
-            ET.SubElement(root, "constant", name=name).text = value
-        else:
-            raise SyntaxError(f"Некорректное объявление константы: {line}")
+    def _remove_comments(self, text):
+        text = re.sub(r"REM.*", "", text)  # Однострочные комментарии
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)  # Многострочные комментарии
+        return text
 
-    def handle_constant_evaluation(self, line, root):
-        name = line[1:-1]
-        if name in self.constants:
-            ET.SubElement(root, "constant_evaluation", name=name).text = self.constants[name]
-        else:
-            raise NameError(f"Константа не найдена: {name}")
+    def _process_constant(self, line):
+        match = re.match(r"(.+?)\s*->\s*([a-zA-Z][_a-zA-Z0-9]*)\s*;", line)
+        if not match:
+            raise SyntaxError(f"Invalid constant declaration: {line}")
+        value, name = match.groups()
+        value = self._evaluate(value)
+        self.constants[name] = value
 
-    def handle_dictionary(self, line, root):
-        if not line.endswith(')'):
-            raise SyntaxError(f"Некорректный словарь: {line}")
-        
-        dict_content = line[5:-1]  # Убираем 'dict(' и ')'
-        items = [item.strip() for item in dict_content.split(',') if item.strip()]
-        dict_element = ET.SubElement(root, "dictionary")
-        
-        for item in items:
-            match = re.match(r'([a-zA-Z][_a-zA-Z0-9]*)\s*=\s*([a-zA-Z0-9]+);?', item)
-            if match:
-                name = match.group(1)
-                value = match.group(2)
-                ET.SubElement(dict_element, "entry", name=name).text = value
-            else:
-                raise SyntaxError(f"Некорректная пара имя-значение в словаре: {item}")
+    def _evaluate(self, expr):
+        # Нормализация значений true/false
+        expr = self._normalize_values(expr)
+        expr = re.sub(r"\$([a-zA-Z][_a-zA-Z0-9]*)\$", 
+                      lambda m: str(self.constants.get(m.group(1), f"Unknown constant: {m.group(1)}")), 
+                      expr)
+        try:
+            return eval(expr)
+        except Exception as e:
+            raise ValueError(f"Failed to evaluate expression '{expr}': {e}")
 
-def main(output_file):
-    parser = ConfigParser()
+    def _normalize_values(self, expr):
+        """Заменяет 'true' на 'True', 'false' на 'False'."""
+        return expr.replace("true", "True").replace("false", "False")
+
+    def _parse_dict(self, lines_iter):
+        """Парсит словарь, начиная с dict( и заканчивая )"""
+        dict_element = ET.Element("dict")
+        content = ""
+
+        for line in lines_iter:
+            line = line.strip()
+            if line.endswith(")"):  # Конец словаря
+                content += line[:-1]  # Добавляем содержимое без ")"
+                break
+            content += line  # Добавляем строки внутри словаря
+
+        for pair in content.split(","):
+            pair = pair.strip()
+            if not pair:
+                continue
+            if "=" not in pair:
+                raise SyntaxError(f"Invalid key-value pair: {pair}")
+            key, value = pair.split("=", 1)
+            key, value = key.strip(), value.strip()
+            if not re.match(r"[a-zA-Z][_a-zA-Z0-9]*", key):
+                raise SyntaxError(f"Invalid key: {key}")
+            value = self._evaluate(value)
+            item = ET.SubElement(dict_element, "item", name=key)
+            item.text = str(value)
+        return dict_element
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Учебный конфигурационный язык в XML.")
+    parser.add_argument("output", help="Путь к выходному XML-файлу.")
+    args = parser.parse_args()
+
+    # Чтение входного текста через stdin
+    input_text = sys.stdin.read()
+
+    config_parser = ConfigParser()
     try:
-        lines = sys.stdin.readlines()
-        xml_output = parser.parse(lines)
-        with open(output_file, 'w') as f:
-            f.write(xml_output)
-    except (SyntaxError, NameError) as e:
-        print(e)
+        root = config_parser.parse(input_text)
+        tree = ET.ElementTree(root)
+        tree.write(args.output, encoding="utf-8", xml_declaration=True)
+        print(f"XML успешно записан в {args.output}")
+    except Exception as e:
+        print(f"Ошибка: {e}")
+
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Использование: python config_parser.py <output_file>")
-        sys.exit(1)
+    main()
 
-    output_file = sys.argv[1]
-    main(output_file)
