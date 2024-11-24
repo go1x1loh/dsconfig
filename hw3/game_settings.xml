@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+<section id="1">
+<dict>
+  <player>
+  <dict>
+    <speed>5.5</speed>
+    <health>100</health>
+    <armor>50</armor>
+  </dict>
+  </player>
+  <graphics>
+  <dict>
+    <resolution>
+    <dict>
+      <width>1920</width>
+      <height>1080</height>
+    </dict>
+    </resolution>
+    <fullscreen>1</fullscreen>
+    <vsync>1</vsync>
+  </dict>
+  </graphics>
+  <audio>
+  <dict>
+    <master_volume>100</master_volume>
+    <music_volume>80</music_volume>
+    <effects_volume>90</effects_volume>
+  </dict>
+  </audio>
+</dict>
+</section>
+</configuration>

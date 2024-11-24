@@ -1,0 +1,21 @@
+/* Server configuration example */
+REM Define base port
+8080 -> base_port;
+
+/* Database settings */
+dict(
+    host = localhost,
+    port = 5432,
+    max_connections = 100,
+    credentials = dict(
+        username = admin,
+        password = secure123
+    )
+)
+
+REM Reference the base port
+dict(
+    http_port = $base_port$,
+    https_port = 8443,
+    workers = 4
+)
