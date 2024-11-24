@@ -1,8 +1,10 @@
-<?xml version="1.0" ?>
-<config>
-  <dict>
-    <item name="host">localhost</item>
-    <item name="port">8080</item>
-    <item name="enable_ssl">True</item>
-  </dict>
-</config>
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+<section id="1">
+<dict>
+  <host>"localhost"</host>
+  <port>8080</port>
+  <enable_ssl>true</enable_ssl>
+</dict>
+</section>
+</configuration>

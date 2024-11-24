@@ -1,0 +1,29 @@
+/* Build system configuration */
+REM Define version numbers
+1 -> major_version;
+2 -> minor_version;
+5 -> patch_version;
+
+dict(
+    project = dict(
+        name = myproject,
+        version = dict(
+            major = $major_version$,
+            minor = $minor_version$,
+            patch = $patch_version$
+        )
+    ),
+    build = dict(
+        compiler = gcc,
+        optimization = 3,
+        warnings = dict(
+            level = 4,
+            treat_as_errors = 1
+        )
+    ),
+    dependencies = dict(
+        boost = 1.74.0,
+        openssl = 1.1.1,
+        zlib = 1.2.11
+    )
+)

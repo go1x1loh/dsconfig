@@ -1,0 +1,11 @@
+server_name = MyServer
+server_port = 8080
+
+dict(
+    database_name = MyDatabase,
+    user = admin,
+    password = secret
+)
+
+$server_name$ -> server
+$server_port$ -> port
