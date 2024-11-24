@@ -1,49 +1,103 @@
 import unittest
-import tempfile
 import os
-import csv
-from interpreter import interpret  # Импортируем функцию interpret
+import tempfile
+from interpreter import UVMInterpreter
+from assembler import pack_instruction
 
-class InterpreterTests(unittest.TestCase):
-    def test_read_command(self):
-        binary_data = bytearray([0x04, 0x00, 0x00, 0x01, 0x17, 0x00, 0x00, 0x02, 0x3a, 0x00, 0x00])
-        memory_range = (0, 1024)
-        expected_result = [['Address', 'Value']] + [[i, 0] for i in range(1024)]
-        expected_result[279][1] = 570
-        self._test_interpreter(binary_data, memory_range, expected_result)
+class TestInterpreter(unittest.TestCase):
+    def setUp(self):
+        self.interpreter = UVMInterpreter()
+        self.test_dir = tempfile.mkdtemp()
+        self.binary_file = os.path.join(self.test_dir, 'test.bin')
+        self.output_file = os.path.join(self.test_dir, 'output.csv')
 
-    def test_write_command(self):
-        binary_data = bytearray([0x03, 0x00, 0x00, 0x01, 0xf6, 0x00, 0x00, 0x03, 0xa7, 0x00, 0x00])
-        memory_range = (0, 1024)
-        expected_result = [['Address', 'Value']] + [[i, 0] for i in range(1024)]
-        expected_result[935][1] = 502
-        self._test_interpreter(binary_data, memory_range, expected_result)
+    def test_load_instruction(self):
+        """Test LOAD instruction execution"""
+        # LOAD 16 42 (Load constant 42 into address 16)
+        binary = pack_instruction(2, 16, 42)
+        
+        with open(self.binary_file, 'wb') as f:
+            f.write(binary)
+        
+        self.interpreter.run(self.binary_file)
+        self.assertEqual(self.interpreter.memory[16], 42)
 
-    def test_le_command(self):
-        binary_data = bytearray([0x06, 0x00, 0x00, 0x03, 0xaa, 0x00, 0x00, 0x00, 0x6f, 0x00, 0x00, 0x02, 0xa5])
-        memory_range = (0, 1024)
-        expected_result = [['Address', 'Value']] + [[i, 0] for i in range(1024)]
-        expected_result[938][1] = 1  # Assuming 111 <= 677
-        self._test_interpreter(binary_data, memory_range, expected_result)
+    def test_write_instruction(self):
+        """Test WRITE instruction execution"""
+        # First LOAD 16 42, then WRITE 16 32
+        binary = pack_instruction(2, 16, 42) + pack_instruction(3, 16, 32)
+        
+        with open(self.binary_file, 'wb') as f:
+            f.write(binary)
+        
+        self.interpreter.run(self.binary_file)
+        self.assertEqual(self.interpreter.memory[32], 42)
 
-    def _test_interpreter(self, binary_data, memory_range, expected_result):
-        with tempfile.NamedTemporaryFile(delete=False) as binary_file:
-            binary_file.write(binary_data)
-            binary_file_name = binary_file.name
+    def test_read_instruction(self):
+        """Test READ instruction execution"""
+        # LOAD 32 42, then READ 16 32
+        binary = pack_instruction(2, 32, 42) + pack_instruction(4, 16, 32)
+        
+        with open(self.binary_file, 'wb') as f:
+            f.write(binary)
+        
+        self.interpreter.run(self.binary_file)
+        self.assertEqual(self.interpreter.memory[16], 42)
 
-        with tempfile.NamedTemporaryFile(delete=False) as result_file:
-            result_file_name = result_file.name
+    def test_le_instruction(self):
+        """Test LE instruction execution"""
+        # LOAD 16 42
+        # LOAD 32 24
+        # LE 8 16 32 (Compare values at 16 and 32, store in 8)
+        binary = (pack_instruction(2, 16, 42) + 
+                 pack_instruction(2, 32, 24) + 
+                 pack_instruction(6, 8, 16, 32))
+        
+        with open(self.binary_file, 'wb') as f:
+            f.write(binary)
+        
+        self.interpreter.run(self.binary_file)
+        self.assertEqual(self.interpreter.memory[8], 0)  # 42 is not <= 24
 
-        interpret(binary_file_name, result_file_name, memory_range)
+    def test_vector_comparison(self):
+        """Test vector comparison program"""
+        # Program to compare two vectors of length 3
+        program = bytearray()
+        
+        # First vector: [10, 20, 30] at addresses [100, 101, 102]
+        for i, value in enumerate([10, 20, 30]):
+            program.extend(pack_instruction(2, 100 + i, value))
+        
+        # Second vector: [15, 25, 35] at addresses [200, 201, 202]
+        for i, value in enumerate([15, 25, 35]):
+            program.extend(pack_instruction(2, 200 + i, value))
+        
+        # Compare elements and store results at addresses [300, 301, 302]
+        for i in range(3):
+            program.extend(pack_instruction(6, 300 + i, 100 + i, 200 + i))
+        
+        with open(self.binary_file, 'wb') as f:
+            f.write(program)
+        
+        self.interpreter.run(self.binary_file)
+        
+        # Save results
+        self.interpreter.save_memory_range(300, 302, self.output_file)
+        
+        # Verify results (all should be 1 since first vector <= second vector)
+        for i in range(3):
+            self.assertEqual(self.interpreter.memory[300 + i], 1)
 
-        with open(result_file_name, 'r') as f:
-            actual_result = list(csv.reader(f))
-
-        self.assertEqual(actual_result, expected_result)
-
-        os.remove(binary_file_name)
-        os.remove(result_file_name)
+    def test_error_handling(self):
+        """Test error handling for invalid operations"""
+        # Try to read from uninitialized memory
+        binary = pack_instruction(4, 16, 32)  # READ 16 32 (32 not initialized)
+        
+        with open(self.binary_file, 'wb') as f:
+            f.write(binary)
+        
+        with self.assertRaises(ValueError):
+            self.interpreter.run(self.binary_file)
 
 if __name__ == '__main__':
     unittest.main()
-
