@@ -1,116 +1,83 @@
 import struct
 import csv
-import sys
+import re
+from typing import List, Optional
 
-def pack_instruction(opcode, *args):
-    """Pack instruction according to UVM specification.
-    All instructions are 11 bytes long.
-    Bits 0-2: opcode
-    Bits 3-30: first address (B)
-    Bits 31-58/46: second address (C) or constant
-    For LE operation:
-    Bits 59-86: third address (D)
-    """
-    result = bytearray(11)  # All instructions are 11 bytes
-    
-    # Pack opcode (bits 0-2)
-    if opcode == 6:  # LE operation
-        result[0] = 0x56  # Special case for LE
-    else:
-        result[0] = 0xB0 | opcode  # Other operations
-    
-    # Pack first address B (bits 3-30)
-    addr_b = args[0]
-    result[1] = (addr_b >> 5) & 0xFF  # Bits 3-10
-    result[2] = (addr_b >> 13) & 0xFF  # Bits 11-18
-    result[3] = 0x00 if opcode != 3 else 0x80  # Special case for WRITE
-    
-    # Pack second value C (bits 31-58/46)
-    value_c = args[1]
-    if opcode == 6:  # LE operation
-        result[4] = value_c & 0xFF  # Bits 31-38
-        result[5] = 0x00  # Bits 39-46
-    else:
-        result[4] = value_c & 0xFF  # Bits 31-38
-        result[5] = (value_c >> 8) & 0xFF  # Bits 39-46
-    result[6] = 0x00
-    result[7] = 0x00
-    
-    # Pack third address D for LE operation (bits 59-86)
-    if len(args) >= 3:
-        addr_d = args[2]
-        result[8] = addr_d & 0xFF  # Bits 59-66
-        result[9] = (addr_d >> 8) & 0xFF  # Bits 67-74
-        result[10] = 0x00
-    else:
-        result[8] = 0x00
-        result[9] = 0x00
-        result[10] = 0x00
-    
-    return result
-
-def assemble(input_file, output_file, log_file):
-    commands = {
-        'LOAD': 2,   # Load constant
-        'WRITE': 3,  # Write to memory
-        'READ': 4,   # Read from memory
-        'LE': 6      # Less than or equal
-    }
-
-    with open(input_file, 'r') as f:
-        lines = f.readlines()
-
-    binary_output = bytearray()
-    log_entries = []
-
-    for line in lines:
-        # Skip comments and empty lines
-        line = line.split('#')[0].strip()
-        if not line:
-            continue
-
-        parts = line.strip().split()
-        command = parts[0]
-        addresses = list(map(int, parts[1:]))
-
-        if command not in commands:
-            raise ValueError(f"Unknown command: {command}")
-
-        opcode = commands[command]
-        
-        # Pack the instruction according to the specification
-        binary_command = pack_instruction(opcode, *addresses)
-        binary_output.extend(binary_command)
-
-        # Create log entry
-        log_entry = {
-            'command': command,
-            'opcode': hex(opcode),
-            'addresses': ','.join(map(str, addresses))
+class Assembler:
+    def __init__(self):
+        self.opcodes = {
+            'LOAD': 2,  # Load constant
+            'WRITE': 3, # Write to memory
+            'READ': 4,  # Read from memory
+            'LE': 6,    # Less than or equal
         }
-        log_entries.append(log_entry)
+        
+    def pack_instruction(self, opcode: int, b: int, c: int, d: Optional[int] = None) -> List[int]:
+        """Pack instruction into 11-byte format according to specification"""
+        if opcode == 6:  # LE operation needs 4 fields
+            if d is None:
+                raise ValueError("LE operation requires 4 fields (opcode, dest, op1, op2)")
+            # Pack as: 3 bits opcode, 28 bits B, 28 bits C, 28 bits D
+            packed = (opcode & 0x7) | ((b & 0xFFFFFFF) << 3) | \
+                    ((c & 0xFFFFFFF) << 31) | ((d & 0xFFFFFFF) << 59)
+        else:
+            # Pack as: 3 bits opcode, 28 bits B, 16/28 bits C
+            packed = (opcode & 0x7) | ((b & 0xFFFFFFF) << 3)
+            if opcode == 2:  # LOAD uses 16-bit constant
+                packed |= ((c & 0xFFFF) << 31)
+            else:  # Other operations use 28-bit address
+                packed |= ((c & 0xFFFFFFF) << 31)
 
-    # Write binary output
-    with open(output_file, 'wb') as f:
-        f.write(binary_output)
+        # Convert to 11 bytes
+        result = []
+        for i in range(11):
+            result.append((packed >> (i * 8)) & 0xFF)
+        return result
 
-    # Write log in CSV format
-    with open(log_file, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['command', 'opcode', 'addresses'])
-        writer.writeheader()
-        writer.writerows(log_entries)
+    def parse_line(self, line: str) -> tuple:
+        """Parse a single line of assembly code"""
+        line = line.strip()
+        if not line or line.startswith(';'):
+            return None
+            
+        # Remove comments
+        line = line.split(';')[0].strip()
+        
+        # Split into tokens
+        tokens = re.split(r'[,\s]+', line)
+        tokens = [t for t in tokens if t]
+        
+        if not tokens:
+            return None
+            
+        opcode = tokens[0].upper()
+        if opcode not in self.opcodes:
+            raise ValueError(f"Unknown opcode: {opcode}")
+            
+        # Parse operands
+        operands = [int(t) for t in tokens[1:]]
+        return (self.opcodes[opcode], *operands)
 
-if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: assembler.py <input_file> <output_file> <log_file>")
-        sys.exit(1)
-
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
-    log_file = sys.argv[3]
-
-    try:
-        assemble(input_file, output_file, log_file)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+    def assemble(self, input_file: str, output_file: str, log_file: str):
+        """Assemble the input file into binary and generate log"""
+        with open(input_file, 'r') as f, \
+             open(output_file, 'wb') as out, \
+             open(log_file, 'w', newline='') as log:
+            
+            csv_writer = csv.writer(log)
+            csv_writer.writerow(['instruction', 'bytes'])
+            
+            for line_num, line in enumerate(f, 1):
+                parsed = self.parse_line(line)
+                if parsed is None:
+                    continue
+                    
+                try:
+                    packed = self.pack_instruction(*parsed)
+                    # Write binary
+                    out.write(bytes(packed))
+                    # Write log
+                    hex_bytes = [f"0x{b:02X}" for b in packed]
+                    csv_writer.writerow([line.strip(), ", ".join(hex_bytes)])
+                except Exception as e:
+                    raise ValueError(f"Error on line {line_num}: {str(e)}")
