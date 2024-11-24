@@ -13,30 +13,34 @@ def pack_instruction(opcode, *args):
     """
     result = bytearray(11)  # All instructions are 11 bytes
     
-    # Pack opcode (bits 0-2) and first address B (bits 3-30)
+    # Pack opcode (bits 0-2)
     if opcode == 6:  # LE operation
         result[0] = 0x56  # Special case for LE
     else:
         result[0] = 0xB0 | opcode  # Other operations
     
-    # Pack first address B
+    # Pack first address B (bits 3-30)
     addr_b = args[0]
-    result[1] = (addr_b >> 4) & 0xFF
-    result[2] = 0x00
+    result[1] = (addr_b >> 5) & 0xFF  # Bits 3-10
+    result[2] = (addr_b >> 13) & 0xFF  # Bits 11-18
     result[3] = 0x00 if opcode != 3 else 0x80  # Special case for WRITE
     
-    # Pack second value C
+    # Pack second value C (bits 31-58/46)
     value_c = args[1]
-    result[4] = value_c & 0xFF
-    result[5] = 0x00
+    if opcode == 6:  # LE operation
+        result[4] = value_c & 0xFF  # Bits 31-38
+        result[5] = 0x00  # Bits 39-46
+    else:
+        result[4] = value_c & 0xFF  # Bits 31-38
+        result[5] = (value_c >> 8) & 0xFF  # Bits 39-46
     result[6] = 0x00
     result[7] = 0x00
     
-    # Pack third address D for LE operation
+    # Pack third address D for LE operation (bits 59-86)
     if len(args) >= 3:
         addr_d = args[2]
-        result[8] = addr_d & 0xFF
-        result[9] = (addr_d >> 8) & 0xFF
+        result[8] = addr_d & 0xFF  # Bits 59-66
+        result[9] = (addr_d >> 8) & 0xFF  # Bits 67-74
         result[10] = 0x00
     else:
         result[8] = 0x00
