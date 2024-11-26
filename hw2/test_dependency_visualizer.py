@@ -11,7 +11,7 @@ from dependency_visualizer import (
 
 class TestDependencyAnalyzer(unittest.TestCase):
     def setUp(self):
-        self.analyzer = DependencyAnalyzer("http://example.com", 3)
+        self.analyzer = DependencyAnalyzer("https://repo1.maven.org/maven2/abbot/", 3)
         self.sample_pom = """<?xml version="1.0" encoding="UTF-8"?>
             <project xmlns="http://maven.apache.org/POM/4.0.0">
                 <dependencies>

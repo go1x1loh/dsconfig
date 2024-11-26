@@ -112,12 +112,16 @@ class TestConfigParser(unittest.TestCase):
             )
         )
         """
-        app_expected = {'app_name': 'my_app', 'version': '1.0.0', 'feature1': 'True', 'feature2': 'False'}
         root = self.parser.parse(app_config)
-        app_results = self.parse_to_dict(app_config)
+        app_name = root.find(".//item[@name='app_name']").text
+        version = root.find(".//item[@name='version']").text
+        feature1 = root.find(".//item[@name='features']/dict/item[@name='feature1']").text
+        feature2 = root.find(".//item[@name='features']/dict/item[@name='feature2']").text
 
-        self.assertEqual(app_results['app_name'], app_expected['app_name'])
-        self.assertEqual(app_results['version'], app_expected['version'])
-        self.assertEqual(app_results['feature1'], app_expected['feature1'])
+        self.assertEqual(app_name, 'my_app')
+        self.assertEqual(version, '1.0.0')
+        self.assertEqual(feature1, 'True')
+        self.assertEqual(feature2, 'False')
 
-
+if __name__ == '__main__':
+    unittest.main()
