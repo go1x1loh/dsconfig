@@ -1,0 +1,48 @@
+@startuml
+skinparam rankdir LR
+skinparam component {
+  BackgroundColor LightBlue
+  BorderColor Black
+  ArrowColor Black
+}
+
+' Определение узлов
+component "junit:junit:4.13.2" as junit_4_13_2
+component "com.github.stephenc.wagon:wagon-gitsite:0.4.1" as wagon_gitsite_0_4_1
+component "org.apache.maven.wagon:wagon-provider-api:1.0" as wagon_api_1_0
+component "org.apache.maven.wagon:wagon-provider-test:1.0" as wagon_test_1_0
+component "org.apache.maven.wagon:wagon-ssh-common-test:1.0" as ssh_common_test_1_0
+component "org.apache.maven.wagon:wagon-ssh-common:1.0" as ssh_common_1_0
+component "junit:junit:3.8.1" as junit_3_8_1
+component "org.codehaus.plexus:plexus-interactivity-api:1.0-alpha-6" as plexus_api_alpha_6
+component "org.codehaus.plexus:plexus-container-default:1.5.5" as plexus_container_1_5_5
+component "org.codehaus.plexus:plexus-utils:3.0" as plexus_utils_3_0
+component "org.apache.maven.scm:maven-scm-api:1.5" as scm_api_1_5
+component "org.apache.maven.scm:maven-scm-manager-plexus:1.5" as scm_manager_1_5
+component "org.apache.maven.scm:maven-scm-test:1.5" as scm_test_1_5
+component "org.apache.maven.scm:maven-scm-provider-gitexe:1.5" as scm_gitexe_1_5
+component "org.apache.maven.scm:maven-scm-provider-git-commons:1.5" as scm_gitcommons_1_5
+component "net.sf.docbook:docbook-xml:5.0-all" as docbook_5_0
+component "org.apache.maven.doxia:doxia-module-markdown:1.5" as doxia_markdown_1_5
+component "org.pegdown:pegdown:1.2.1" as pegdown_1_2_1
+
+' Определение связей
+junit_4_13_2 --> wagon_gitsite_0_4_1
+junit_4_13_2 --> doxia_markdown_1_5
+wagon_gitsite_0_4_1 --> wagon_api_1_0
+wagon_gitsite_0_4_1 --> wagon_test_1_0
+wagon_gitsite_0_4_1 --> ssh_common_test_1_0
+wagon_gitsite_0_4_1 --> ssh_common_1_0
+wagon_gitsite_0_4_1 --> junit_3_8_1
+wagon_gitsite_0_4_1 --> plexus_api_alpha_6
+wagon_gitsite_0_4_1 --> plexus_container_1_5_5
+wagon_gitsite_0_4_1 --> plexus_utils_3_0
+wagon_gitsite_0_4_1 --> scm_api_1_5
+wagon_gitsite_0_4_1 --> scm_manager_1_5
+wagon_gitsite_0_4_1 --> scm_test_1_5
+wagon_gitsite_0_4_1 --> scm_gitexe_1_5
+wagon_gitsite_0_4_1 --> scm_gitcommons_1_5
+wagon_gitsite_0_4_1 --> docbook_5_0
+doxia_markdown_1_5 --> pegdown_1_2_1
+@enduml
+
