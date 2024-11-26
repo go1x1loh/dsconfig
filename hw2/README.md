@@ -1,6 +1,6 @@
 Dependency Visualizer
 
-![Header1](hw2/output/graph.png)
+![Header1](https://github.com/go1x1loh/dsconfig/blob/main/hw2/output/graph.png)
 
 
 Dependency Visualizer — это инструмент для анализа зависимостей Maven-пакетов и генерации графов зависимостей с использованием PlantUML.
