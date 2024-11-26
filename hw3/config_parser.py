@@ -141,8 +141,11 @@ class ConfigParser:
                 current.append(char)
             # Handle nested structures when not in quotes
             elif quote_char is None:
-                if char == '=' and not in_value:
+                if char == '=' and not in_value and paren_count == 0:
                     key = ''.join(current).strip()
+                    # Validate key type - must be a number or dict
+                    if not (key.startswith('dict(') or key.replace('.', '').isdigit()):
+                        raise SyntaxError(f"Invalid key type: {key}. Key must be a number or dictionary")
                     current = []
                     in_value = True
                 elif char == '(':
@@ -171,20 +174,33 @@ class ConfigParser:
         # Process each key-value pair
         for key, value in pairs:
             if not key or not value:
-                continue
+                raise SyntaxError("Empty key or value not allowed")
             
-            # Remove quotes if present
-            if value.startswith('"') and value.endswith('"'):
-                value = value[1:-1]
-            elif value.startswith("'") and value.endswith("'"):
-                value = value[1:-1]
-            
-            # Handle nested dictionary
-            if value.startswith('dict('):
-                item = ET.SubElement(dict_elem, 'item', {'name': key})
-                nested_dict = self.handle_dict(value)
-                item.append(nested_dict)
+            # Handle dictionary key
+            if key.startswith('dict('):
+                key_dict = self.handle_dict(key)
+                # Create a unique name for the dictionary key
+                dict_key = ET.SubElement(dict_elem, 'item')
+                dict_key.append(key_dict)
             else:
+                # Handle number key
+                try:
+                    float(key)  # Validate that key is a number
+                except ValueError:
+                    raise SyntaxError(f"Invalid key: {key}. Must be a number or dictionary")
+                dict_key = ET.SubElement(dict_elem, 'item', {'name': key})
+            
+            # Handle value
+            if value.startswith('dict('):
+                nested_dict = self.handle_dict(value)
+                dict_key.append(nested_dict)
+            else:
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                
                 # Handle constant reference
                 if value.startswith('$') and value.endswith('$'):
                     value = str(self.resolve_constant(value))
@@ -193,8 +209,7 @@ class ConfigParser:
                 elif value.lower() == 'false':
                     value = 'False'
                 
-                item = ET.SubElement(dict_elem, 'item', {'name': key})
-                item.text = value
+                dict_key.text = value
         
         return dict_elem
 

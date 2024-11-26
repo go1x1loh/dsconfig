@@ -1,67 +1,139 @@
 import unittest
 import xml.etree.ElementTree as ET
 from io import StringIO
-from config_parser import ConfigParser  # Импортируем наш парсер
+from config_parser import ConfigParser
 
 
 class TestConfigParser(unittest.TestCase):
     def setUp(self):
         self.parser = ConfigParser()
 
-    def parse_to_dict(self, config_text):
-        """Утилита для преобразования XML-результата в словарь для удобства проверки."""
-        root = self.parser.parse(config_text)
-        result = {}
-        for dict_elem in root.findall("dict"):
-            for item in dict_elem.findall("item"):
-                name = item.attrib['name']
-                result[name] = item.text
-        return result
+    def normalize_xml(self, xml_str):
+        """Утилита для нормализации XML строки (удаление пробелов) для сравнения."""
+        return ''.join(xml_str.split())
 
     def test_remove_comments(self):
         """Тест на удаление комментариев."""
         config = """
         REM Это комментарий
         dict(
-            key1 = "value1" /* еще комментарий */
-            key2 = "value2"
+            123 = "value1", /* еще комментарий */
+            456 = "value2"
         )
         """
-        expected = {'key1': 'value1', 'key2': 'value2'}
-        result = self.parse_to_dict(config)
-        self.assertEqual(result, expected)
+        root = self.parser.parse(config)
+        expected_xml = '''<configuration>
+    <dict>
+        <item name="123">value1</item>
+        <item name="456">value2</item>
+    </dict>
+</configuration>'''
+        
+        self.assertEqual(
+            self.normalize_xml(ET.tostring(root, encoding='unicode')), 
+            self.normalize_xml(expected_xml)
+        )
 
     def test_constants_declaration_and_usage(self):
         """Тест на объявление и использование констант."""
         config = """
         8080 -> port;
         dict(
-            key1 = $port$,
-            key2 = "test"
+            123 = $port$,
+            456 = "test"
         )
         """
-        expected = {'key1': '8080', 'key2': 'test'}
-        result = self.parse_to_dict(config)
-        self.assertEqual(result, expected)
+        root = self.parser.parse(config)
+        expected_xml = '''<configuration>
+    <dict>
+        <item name="123">8080</item>
+        <item name="456">test</item>
+    </dict>
+</configuration>'''
+        
+        self.assertEqual(
+            self.normalize_xml(ET.tostring(root, encoding='unicode')), 
+            self.normalize_xml(expected_xml)
+        )
 
     def test_nested_dictionaries(self):
         """Тест на вложенные словари."""
         config = """
         dict(
-            key1 = dict(
-                inner_key1 = 123,
-                inner_key2 = "inner_value"
+            123 = dict(
+                456 = "inner_value1",
+                789 = "inner_value2"
             ),
-            key2 = "outer_value"
+            456 = dict(
+                789 = "test"
+            )
         )
         """
         root = self.parser.parse(config)
-        nested_dict = root.find(".//item[@name='key1']/dict")
-        inner_key1 = nested_dict.find("item[@name='inner_key1']").text
-        inner_key2 = nested_dict.find("item[@name='inner_key2']").text
+        expected_xml = '''<configuration>
+    <dict>
+        <item name="123">
+            <dict>
+                <item name="456">inner_value1</item>
+                <item name="789">inner_value2</item>
+            </dict>
+        </item>
+        <item name="456">
+            <dict>
+                <item name="789">test</item>
+            </dict>
+        </item>
+    </dict>
+</configuration>'''
+        
+        self.assertEqual(
+            self.normalize_xml(ET.tostring(root, encoding='unicode')), 
+            self.normalize_xml(expected_xml)
+        )
 
-        self.assertEqual(inner_key1, '123')
-        self.assertEqual(inner_key2, 'inner_value')
+    def test_syntax_error(self):
+        """Тест на синтаксические ошибки."""
+        # Тест на неправильный тип ключа (строка)
+        config1 = """
+        dict(
+            key = "value"  /* Ключ не может быть строкой */
+        )
+        """
+        with self.assertRaises(SyntaxError):
+            self.parser.parse(config1)
+
+        # Тест на пропущенные кавычки в значении
+        config2 = """
+        dict(
+            123 = value  /* Пропущены кавычки */
+        )
+        """
+        with self.assertRaises(SyntaxError):
+            self.parser.parse(config2)
+
+    def test_realistic_configurations(self):
+        """Тесты с примерами из реальных предметных областей."""
+        # 1. Конфигурация веб-сервера
+        web_server_config = """
+        dict(
+            123 = "localhost",
+            456 = 8080,
+            789 = true
+        )
+        """
+        root = self.parser.parse(web_server_config)
+        expected_xml = '''<configuration>
+    <dict>
+        <item name="123">localhost</item>
+        <item name="456">8080</item>
+        <item name="789">True</item>
+    </dict>
+</configuration>'''
+        
+        self.assertEqual(
+            self.normalize_xml(ET.tostring(root, encoding='unicode')), 
+            self.normalize_xml(expected_xml)
+        )
 
     def test_syntax_error(self):
         """Тест на синтаксические ошибки."""
@@ -74,54 +146,86 @@ class TestConfigParser(unittest.TestCase):
         # 1. Конфигурация веб-сервера
         web_server_config = """
         dict(
-            host = "localhost",
-            port = 8080,
-            enable_ssl = true
+            123 = "localhost",
+            456 = 8080,
+            789 = true
         )
         """
-        web_expected = {'host': 'localhost', 'port': '8080', 'enable_ssl': 'True'}
-        self.assertEqual(self.parse_to_dict(web_server_config), web_expected)
+        root = self.parser.parse(web_server_config)
+        expected_xml = '''<configuration>
+    <dict>
+        <item name="123">localhost</item>
+        <item name="456">8080</item>
+        <item name="789">True</item>
+    </dict>
+</configuration>'''
+        
+        self.assertEqual(
+            self.normalize_xml(ET.tostring(root, encoding='unicode')), 
+            self.normalize_xml(expected_xml)
+        )
 
         # 2. Конфигурация базы данных
         db_config = """
         dict(
-            db_name = "test_db",
-            user = "admin",
-            password = "password123",
-            nested_config = dict(
-                retries = 3,
-                timeout = 30
+            123 = "test_db",
+            456 = "admin",
+            789 = "password123",
+            1011 = dict(
+                1213 = 3,
+                1415 = 30
             )
         )
         """
         root = self.parser.parse(db_config)
-        db_name = root.find(".//item[@name='db_name']").text
-        nested_retries = root.find(".//item[@name='nested_config']/dict/item[@name='retries']").text
-
-        self.assertEqual(db_name, "test_db")
-        self.assertEqual(nested_retries, '3')
+        expected_xml = '''<configuration>
+    <dict>
+        <item name="123">test_db</item>
+        <item name="456">admin</item>
+        <item name="789">password123</item>
+        <item name="1011">
+            <dict>
+                <item name="1213">3</item>
+                <item name="1415">30</item>
+            </dict>
+        </item>
+    </dict>
+</configuration>'''
+        
+        self.assertEqual(
+            self.normalize_xml(ET.tostring(root, encoding='unicode')), 
+            self.normalize_xml(expected_xml)
+        )
 
         # 3. Конфигурация приложения
         app_config = """
         dict(
-            app_name = "my_app",
-            version = "1.0.0",
-            features = dict(
-                feature1 = true,
-                feature2 = false
+            123 = "my_app",
+            456 = "1.0.0",
+            789 = dict(
+                1011 = true,
+                1213 = false
             )
         )
         """
         root = self.parser.parse(app_config)
-        app_name = root.find(".//item[@name='app_name']").text
-        version = root.find(".//item[@name='version']").text
-        feature1 = root.find(".//item[@name='features']/dict/item[@name='feature1']").text
-        feature2 = root.find(".//item[@name='features']/dict/item[@name='feature2']").text
-
-        self.assertEqual(app_name, 'my_app')
-        self.assertEqual(version, '1.0.0')
-        self.assertEqual(feature1, 'True')
-        self.assertEqual(feature2, 'False')
+        expected_xml = '''<configuration>
+    <dict>
+        <item name="123">my_app</item>
+        <item name="456">1.0.0</item>
+        <item name="789">
+            <dict>
+                <item name="1011">True</item>
+                <item name="1213">False</item>
+            </dict>
+        </item>
+    </dict>
+</configuration>'''
+        
+        self.assertEqual(
+            self.normalize_xml(ET.tostring(root, encoding='unicode')), 
+            self.normalize_xml(expected_xml)
+        )
 
 if __name__ == '__main__':
     unittest.main()
